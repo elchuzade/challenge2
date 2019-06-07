@@ -93,13 +93,11 @@ const answerCheck = answer => {
         answer.trim()
       ]).then(result => {
         if (result.length > 0) {
-          console.log('this name already exists');
-          // process.exit(0);
-          msg = 'This github user name already exists, try another one! ';
           console.log(
             `This github user name already exists, try another one! ${initialMessage}`
           );
-          return;
+          msg = 'This github user name already exists, try another one! ';
+          return msg;
         } else {
           return request({
             uri: `https://api.github.com/users/${answer}`,
@@ -119,6 +117,11 @@ const answerCheck = answer => {
               console.log(
                 `Great, you have added a new user number ${id} and you can add more users! ${initialMessage}`
               );
+            })
+            .catch(err => {
+              console.log(`${err.error.message}! Try again! ${initialMessage}`);
+              msg = `${err.error.message}! `;
+              return msg;
             });
         }
       });
