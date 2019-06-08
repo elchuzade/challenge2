@@ -51,53 +51,80 @@ interface GithubUsers {
   public_repos: number;
 }
 
+const initialMessage =
+  'Please type a github username to add to our db or use menu to read our db: 1 - lisbon, 2 - stats : ';
+
 const pgp = pgPromise(pgpDefaultConfig);
 const db = pgp(options);
+let dbCreated = false;
+
+db.none(
+  'CREATE TABLE IF NOT EXISTS github_users (id BIGSERIAL, login TEXT, name TEXT, company TEXT, public_repos INTEGER, location TEXT)'
+).then(() => {
+  dbCreated = true;
+  console.log('db is created, you can start using the app');
+  rl.question(`Hello there! ${initialMessage}`, answer => {
+    answerCheck(answer)
+      .then(msg => {
+        userReplay(msg);
+      })
+      .catch(msg => {
+        userReplay(msg);
+      });
+  });
+});
 
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
 });
-const initialMessage =
-  'Please type a github username to add to our db or use menu to read our db: 1 - lisbon, 2 - stats : ';
-rl.question(`Hello there! ${initialMessage}`, answer => {
-  let msg = answerCheck(answer);
-  userReplay(msg);
-});
+
 rl.on('close', () => {
   console.log('Have a nice day! :)');
 });
 
 const answerCheck = answer => {
-  let msg = '';
-  if (answer.trim().length > 39) {
-    // Github does not accept usernames longer than 39 characters
-    console.log('username must be between 1 and 39 characters');
-  } else if (answer.length === 0) {
-    console.log(
-      'empty username definitely does not exist on github, try again'
-    );
-  } else if (answer === '1') {
-    console.log('lisbon stuff');
-    msg = 'you are checking a lisbon stuff ';
-  } else if (answer === '2') {
-    console.log('table stuff');
-    msg = 'you are checking a table stuff ';
-  } else {
-    console.log('add a user to db');
-
-    db.none(
-      'CREATE TABLE IF NOT EXISTS github_users (id BIGSERIAL, login TEXT, name TEXT, company TEXT, public_repos INTEGER, location TEXT)'
-    ).then(() => {
-      db.query('SELECT * FROM github_users where login = $1', [
+  return new Promise((resolve, reject) => {
+    let msg = '';
+    if (answer.trim().length > 39) {
+      // Github does not accept usernames longer than 39 characters
+      msg = 'Username must be between 1 and 39 characters';
+      // console.log(msg);
+      resolve(msg);
+    } else if (answer.length === 0) {
+      msg = 'Empty username definitely does not exist on github, try again';
+      // console.log(msg);
+      resolve(msg);
+    } else if (answer === '1') {
+      db.query('SELECT * FROM github_users WHERE location = $1', ['Lisbon'])
+        .then(result => {
+          if (result.length > 0) {
+            msg = 'You are checking github users from Lisbon ';
+            console.log(result);
+            resolve(msg);
+          } else {
+            msg =
+              'Sorry no one in our db is from Lisbon, try adding jcristovao and check it again :)';
+            console.log(msg);
+            resolve(msg);
+          }
+        })
+        .catch(err => {
+          console.log(err);
+          reject(err);
+        });
+    } else if (answer === '2') {
+      msg = 'you are checking a table stuff ';
+      console.log('table stuff');
+      resolve(msg);
+    } else {
+      db.query('SELECT * FROM github_users WHERE login = $1', [
         answer.trim()
       ]).then(result => {
         if (result.length > 0) {
-          console.log(
-            `This github user name already exists, try another one! ${initialMessage}`
-          );
           msg = 'This github user name already exists, try another one! ';
-          return msg;
+          console.log(msg);
+          resolve(msg);
         } else {
           return request({
             uri: `https://api.github.com/users/${answer}`,
@@ -114,28 +141,32 @@ const answerCheck = answer => {
             )
             .then(({ id }) => {
               msg = `Great, you have added a new user number ${id} and you can add more users! `;
-              console.log(
-                `Great, you have added a new user number ${id} and you can add more users! ${initialMessage}`
-              );
+              console.log(`${msg}${initialMessage}`);
+              resolve(msg);
             })
             .catch(err => {
-              console.log(`${err.error.message}! Try again! ${initialMessage}`);
               msg = `${err.error.message}! `;
-              return msg;
+              console.log(`${msg}Try again! ${initialMessage}`);
+              reject(msg);
             });
         }
       });
-    });
-  }
-  return msg;
+    }
+  });
 };
 
 const userReplay = msg => {
   rl.setPrompt(`${msg} ${initialMessage}`);
   rl.prompt();
   rl.on('line', answer => {
-    let msg = answerCheck(answer);
-    rl.setPrompt(`${msg}${initialMessage}`);
-    rl.prompt();
+    answerCheck(answer)
+      .then(msg => {
+        rl.setPrompt(`${msg}${initialMessage}`);
+        rl.prompt();
+      })
+      .catch(msg => {
+        rl.setPrompt(`${msg}${initialMessage}`);
+        rl.prompt();
+      });
   });
 };
