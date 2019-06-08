@@ -96,16 +96,19 @@ const answerCheck = answer => {
       // console.log(msg);
       resolve(msg);
     } else if (answer === '1') {
-      db.query('SELECT * FROM github_users WHERE location = $1', ['Lisbon'])
+      db.query('SELECT * FROM github_users WHERE location in ($1, $2, $3)', [
+        'Lisbon',
+        'LISBON',
+        'lisbon'
+      ])
         .then(result => {
           if (result.length > 0) {
-            msg = 'You are checking github users from Lisbon ';
+            msg = 'Github users from Lisbon ';
             console.log(result);
             resolve(msg);
           } else {
             msg =
-              'Sorry no one in our db is from Lisbon, try adding jcristovao and check it again :)';
-            console.log(msg);
+              'Sorry no one in our db is from Lisbon, try adding jcristovao and check it again :) ';
             resolve(msg);
           }
         })
@@ -114,9 +117,22 @@ const answerCheck = answer => {
           reject(err);
         });
     } else if (answer === '2') {
-      msg = 'you are checking a table stuff ';
-      console.log('table stuff');
-      resolve(msg);
+      db.query('select location, count(*) from github_users group by location')
+        .then(result => {
+          if (result.length > 0) {
+            msg = 'Amount of users per location ';
+            console.log(result);
+            resolve(msg);
+          } else {
+            msg =
+              'Sorry our db is empty, try adding anyone first and check it again ';
+            resolve(msg);
+          }
+        })
+        .catch(err => {
+          console.log(err);
+          reject(err);
+        });
     } else {
       db.query('SELECT * FROM github_users WHERE login = $1', [
         answer.trim()
