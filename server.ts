@@ -52,17 +52,15 @@ interface GithubUsers {
 }
 
 const initialMessage =
-  'Please type a github username to add to our db or use menu to read our db: 1 - lisbon, 2 - stats : ';
+  'Please, type a github username to add to our db or type "-" to see users from Lisbon or "+" to see count of users per location : ';
 
 const pgp = pgPromise(pgpDefaultConfig);
 const db = pgp(options);
-let dbCreated = false;
 
 db.none(
   'CREATE TABLE IF NOT EXISTS github_users (id BIGSERIAL, login TEXT, name TEXT, company TEXT, public_repos INTEGER, location TEXT)'
 ).then(() => {
-  dbCreated = true;
-  console.log('db is created, you can start using the app');
+  console.log('Github users table exists, you can start using the app');
   rl.question(`Hello there! ${initialMessage}`, answer => {
     answerCheck(answer)
       .then(msg => {
@@ -86,16 +84,15 @@ rl.on('close', () => {
 const answerCheck = answer => {
   return new Promise((resolve, reject) => {
     let msg = '';
-    if (answer.trim().length > 39) {
+    if (answer.length > 39) {
       // Github does not accept usernames longer than 39 characters
-      msg = 'Username must be between 1 and 39 characters';
-      // console.log(msg);
+      msg = 'Username must be between 1 and 39 characters! ';
       resolve(msg);
     } else if (answer.length === 0) {
-      msg = 'Empty username definitely does not exist on github, try again';
-      // console.log(msg);
+      msg = 'Empty username definitely does not exist on github, try again! ';
       resolve(msg);
-    } else if (answer === '1') {
+    } else if (answer === '-') {
+      // Showing all users from Lisbon regardless letter capitalization
       db.query('SELECT * FROM github_users WHERE location in ($1, $2, $3)', [
         'Lisbon',
         'LISBON',
@@ -103,7 +100,7 @@ const answerCheck = answer => {
       ])
         .then(result => {
           if (result.length > 0) {
-            msg = 'Github users from Lisbon ';
+            msg = 'Github users from Lisbon! ';
             console.log(result);
             resolve(msg);
           } else {
@@ -116,7 +113,7 @@ const answerCheck = answer => {
           console.log(err);
           reject(err);
         });
-    } else if (answer === '2') {
+    } else if (answer === '+') {
       db.query('select location, count(*) from github_users group by location')
         .then(result => {
           if (result.length > 0) {
@@ -130,43 +127,45 @@ const answerCheck = answer => {
           }
         })
         .catch(err => {
+          msg = 'Something went wrong';
           console.log(err);
-          reject(err);
+          reject(msg);
         });
     } else {
-      db.query('SELECT * FROM github_users WHERE login = $1', [
-        answer.trim()
-      ]).then(result => {
-        if (result.length > 0) {
-          msg = 'This github user name already exists, try another one! ';
-          console.log(msg);
-          resolve(msg);
-        } else {
-          return request({
-            uri: `https://api.github.com/users/${answer}`,
-            headers: {
-              'User-Agent': 'Request-Promise'
-            },
-            json: true
-          })
-            .then((data: GithubUsers) =>
-              db.one(
-                'INSERT INTO github_users (login, name, company, public_repos, location) VALUES ($[login], $[name], $[company], $[public_repos], $[location]) RETURNING id',
-                data
-              )
-            )
-            .then(({ id }) => {
-              msg = `Great, you have added a new user number ${id} and you can add more users! `;
-              console.log(`${msg}${initialMessage}`);
-              resolve(msg);
+      db.query('SELECT * FROM github_users WHERE login = $1', [answer.trim()])
+        .then(result => {
+          if (result.length > 0) {
+            msg = 'This github user name already exists, try another one! ';
+            resolve(msg);
+          } else {
+            return request({
+              uri: `https://api.github.com/users/${answer}`,
+              headers: {
+                'User-Agent': 'Request-Promise'
+              },
+              json: true
             })
-            .catch(err => {
-              msg = `${err.error.message}! `;
-              console.log(`${msg}Try again! ${initialMessage}`);
-              reject(msg);
-            });
-        }
-      });
+              .then((data: GithubUsers) =>
+                db.one(
+                  'INSERT INTO github_users (login, name, company, public_repos, location) VALUES ($[login], $[name], $[company], $[public_repos], $[location]) RETURNING id',
+                  data
+                )
+              )
+              .then(({ id }) => {
+                msg = `Great, you have added a new user number ${id} and you can add more users! `;
+                resolve(msg);
+              })
+              .catch(err => {
+                msg = `${err.error.message}! `;
+                reject(msg);
+              });
+          }
+        })
+        .catch(err => {
+          msg = 'Something went wrong';
+          console.log(err);
+          reject(msg);
+        });
     }
   });
 };
